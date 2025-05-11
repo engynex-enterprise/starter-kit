@@ -3,6 +3,14 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import {
+  configureAmplify,
+  cognitoSignIn,
+  cognitoSignUp,
+  cognitoSignOut,
+  cognitoGetCurrentUser,
+  isAuthenticated
+} from "@/lib/amplify";
 
 // Definir el tipo para el usuario autenticado
 type AuthUser = {
@@ -36,22 +44,40 @@ export function useAuth() {
   return context;
 }
 
-// Proveedor de autenticación simulado
+// Proveedor de autenticación con Cognito
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  // Verificar si hay un usuario en localStorage al cargar
+  // Configurar Amplify al cargar
+  useEffect(() => {
+    configureAmplify();
+  }, []);
+
+  // Verificar si hay un usuario autenticado al cargar
   useEffect(() => {
     const checkUser = async () => {
       try {
-        const storedUser = localStorage.getItem("auth_user");
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
+        // Verificar si hay un usuario autenticado con Cognito
+        const isUserAuthenticated = await isAuthenticated();
+        
+        if (isUserAuthenticated) {
+          const currentUser = await cognitoGetCurrentUser();
+          
+          // Crear objeto de usuario con la información de Cognito
+          const authUser: AuthUser = {
+            username: currentUser.username,
+            userId: currentUser.userId,
+            email: currentUser.signInDetails?.loginId
+          };
+          
+          setUser(authUser);
+        } else {
+          setUser(null);
         }
-      } catch {
-        // Si hay un error, no hay usuario autenticado
+      } catch (error) {
+        console.error("Error al verificar usuario:", error);
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -66,41 +92,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Función para iniciar sesión (simulada)
+  // Función para iniciar sesión con Cognito
   const login = async (username: string, password: string) => {
     try {
       setIsLoading(true);
 
-      // Simulamos una verificación de credenciales
-      // En un entorno real, esto se haría con Cognito
-      if (password.length < 8) {
-        throw new Error("Contraseña incorrecta");
+      // Iniciar sesión con Cognito
+      // cognitoSignIn ahora devuelve true si es exitoso o lanza un error si falla
+      const signInSuccess = await cognitoSignIn(username, password);
+      
+      // Si llegamos aquí, la autenticación fue exitosa
+      try {
+        // Obtener información del usuario actual
+        const currentUser = await cognitoGetCurrentUser();
+        
+        // Crear objeto de usuario con la información de Cognito
+        const authUser: AuthUser = {
+          username: currentUser.username || username,
+          userId: currentUser.userId || `user-${Date.now()}`,
+          email: currentUser.signInDetails?.loginId || username
+        };
+        
+        setUser(authUser);
+        toast.success("Inicio de sesión exitoso");
+        router.push("/dashboard");
+      } catch (userError) {
+        console.error("Error al obtener información del usuario:", userError);
+        
+        // Si no podemos obtener la información del usuario pero la autenticación fue exitosa,
+        // creamos un objeto de usuario básico
+        const basicUser: AuthUser = {
+          username,
+          userId: `user-${Date.now()}`,
+          email: username.includes('@') ? username : undefined
+        };
+        
+        setUser(basicUser);
+        toast.success("Inicio de sesión exitoso");
+        router.push("/dashboard");
       }
-
-      // Crear un usuario simulado
-      const mockUser: AuthUser = {
-        username,
-        userId: `user-${Date.now()}`,
-        email: `${username}@ejemplo.com`,
-      };
-
-      // Guardar en localStorage para persistencia
-      localStorage.setItem("auth_user", JSON.stringify(mockUser));
-
-      // Actualizar el estado
-      setUser(mockUser);
-      toast.success("Inicio de sesión exitoso");
-      router.push("/dashboard");
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error("Error al iniciar sesión:", error);
-      toast.error("Error al iniciar sesión. Verifica tus credenciales.");
-      throw error;
+      
+      // Mostrar mensaje de error específico si está disponible
+      if (error.message) {
+        toast.error(`Error: ${error.message}`);
+      } else {
+        toast.error("Error al iniciar sesión. Verifica tus credenciales.");
+      }
+      
+      // No propagamos el error para evitar que se muestre en la consola
+      // pero mantenemos el estado de error
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Función para registrarse (simulada)
+  // Función para registrarse con Cognito
   const register = async (
     username: string,
     password: string,
@@ -109,7 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
 
-      // Validar la contraseña
+      // Validar la contraseña según los requisitos de Cognito
       if (
         password.length < 8 ||
         !/[A-Z]/.test(password) ||
@@ -117,38 +165,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         !/[0-9]/.test(password) ||
         !/[^A-Za-z0-9]/.test(password)
       ) {
-        throw new Error("La contraseña no cumple con los requisitos");
+        throw new Error("La contraseña no cumple con los requisitos de seguridad");
       }
 
-      // Simular registro exitoso
-      toast.success(`Registro exitoso para ${email}`);
+      // Registrar usuario en Cognito
+      const signUpResult = await cognitoSignUp(username, password, email);
       
-      // Redirigir a la página de inicio de sesión
-      router.push("/login");
-    } catch (error: unknown) {
+      if (signUpResult) {
+        toast.success(`Registro exitoso para ${email}. Verifica tu correo para confirmar tu cuenta.`);
+        router.push("/login");
+      } else {
+        throw new Error("No se pudo completar el registro");
+      }
+    } catch (error: any) {
       console.error("Error al registrarse:", error);
-      toast.error("Error al registrarse. Inténtalo de nuevo.");
+      
+      // Mostrar mensaje de error específico si está disponible
+      if (error.message) {
+        toast.error(`Error: ${error.message}`);
+      } else {
+        toast.error("Error al registrarse. Inténtalo de nuevo.");
+      }
+      
       throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Función para cerrar sesión
+  // Función para cerrar sesión con Cognito
   const logout = async () => {
     try {
       setIsLoading(true);
 
-      // Eliminar usuario de localStorage
-      localStorage.removeItem("auth_user");
-
+      // Cerrar sesión en Cognito
+      await cognitoSignOut();
+      
       // Actualizar estado
       setUser(null);
       toast.success("Sesión cerrada");
       router.push("/login");
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error("Error al cerrar sesión:", error);
-      toast.error("Error al cerrar sesión");
+      
+      // Mostrar mensaje de error específico si está disponible
+      if (error.message) {
+        toast.error(`Error: ${error.message}`);
+      } else {
+        toast.error("Error al cerrar sesión");
+      }
     } finally {
       setIsLoading(false);
     }
