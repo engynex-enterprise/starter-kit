@@ -1,0 +1,22 @@
+{
+  "Auth": {
+    "Cognito": {
+      "userPoolId": "us-east-1_0DpfLTIEs",
+      "userPoolClientId": "2ka09ri6tt6o7hajram9p95fan",
+      "identityPoolId": "",
+      "allowGuestAccess": false,
+      "loginWith": {
+        "email": true,
+        "phone": false,
+        "username": true,
+        "oauth": {
+          "domain": "https://us-east-10dpflties.auth.us-east-1.amazoncognito.com",
+          "scopes": ["email", "openid", "profile"],
+          "redirectSignIn": ["http://localhost:3000/"],
+          "redirectSignOut": ["http://localhost:3000/"],
+          "responseType": "code"
+        }
+      }
+    }
+  }
+}

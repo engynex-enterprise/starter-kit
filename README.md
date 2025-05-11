@@ -1,36 +1,130 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sistema de Autenticación con AWS Amplify y shadcn/ui
 
-## Getting Started
+Este proyecto implementa un sistema de autenticación completo utilizando AWS Amplify para la autenticación con Cognito y shadcn/ui para los componentes de la interfaz de usuario.
 
-First, run the development server:
+## Características
+
+- Registro de usuarios
+- Inicio de sesión
+- Protección de rutas
+- Interfaz de usuario moderna con shadcn/ui
+- Validación de formularios con Zod
+- Notificaciones con Sonner
+
+## Requisitos previos
+
+- Node.js 18 o superior
+- Una cuenta de AWS
+- AWS CLI configurado
+
+## Configuración
+
+### 1. Clonar el repositorio
+
+```bash
+git clone <url-del-repositorio>
+cd <nombre-del-repositorio>
+```
+
+### 2. Instalar dependencias
+
+```bash
+npm install
+```
+
+### 3. Configurar AWS Amplify
+
+Para que la autenticación funcione correctamente, necesitas configurar un User Pool en AWS Cognito:
+
+#### Requisitos de contraseña
+
+El sistema está configurado para validar que las contraseñas cumplan con los siguientes requisitos:
+- Al menos 8 caracteres
+- Al menos una letra mayúscula
+- Al menos una letra minúscula
+- Al menos un número
+- Al menos un carácter especial
+
+Estos requisitos coinciden con la política de contraseñas predeterminada de AWS Cognito.
+
+1. Inicia sesión en la consola de AWS
+2. Ve a Amazon Cognito
+3. Crea un nuevo User Pool
+4. Configura las opciones según tus necesidades (autenticación por email, políticas de contraseñas, etc.)
+5. Anota el ID del User Pool y el ID del cliente web
+
+Luego, actualiza el archivo `src/amplifyconfiguration.json` con tus propios valores:
+
+```json
+{
+  "Auth": {
+    "Cognito": {
+      "userPoolId": "tu-user-pool-id",
+      "userPoolClientId": "tu-client-id",
+      "identityPoolId": "",
+      "allowGuestAccess": false,
+      "loginWith": {
+        "email": true,
+        "phone": false,
+        "username": true,
+        "oauth": {
+          "domain": "tu-dominio.auth.tu-region.amazoncognito.com",
+          "scopes": ["email", "openid", "profile"],
+          "redirectSignIn": ["http://localhost:3000/"],
+          "redirectSignOut": ["http://localhost:3000/"],
+          "responseType": "code"
+        }
+      }
+    }
+  }
+}
+```
+
+### 4. Ejecutar el proyecto
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+La aplicación estará disponible en http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Estructura del proyecto
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `src/app`: Páginas de la aplicación (login, signup, dashboard)
+- `src/components/ui`: Componentes de shadcn/ui
+- `src/components/providers`: Proveedores de contexto (tema, autenticación)
+- `src/lib`: Utilidades y configuración de Amplify
+- `src/middleware.ts`: Middleware para protección de rutas
 
-## Learn More
+## Flujo de autenticación
 
-To learn more about Next.js, take a look at the following resources:
+1. El usuario accede a la página principal
+2. Puede elegir registrarse o iniciar sesión
+3. Al registrarse, se crea una cuenta en Cognito
+4. Al iniciar sesión, se obtiene un token de autenticación
+5. Las rutas protegidas verifican la autenticación a través del middleware
+6. El usuario puede cerrar sesión desde el dashboard
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Personalización
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Componentes de UI
 
-## Deploy on Vercel
+Puedes añadir más componentes de shadcn/ui con:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npx shadcn add <nombre-del-componente>
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Estilos
+
+Los estilos se gestionan con Tailwind CSS. Puedes personalizar los colores y otros aspectos en:
+
+- `src/app/globals.css`: Variables CSS globales
+- `tailwind.config.js`: Configuración de Tailwind
+
+### Autenticación
+
+Puedes modificar las opciones de autenticación en:
+
+- `src/components/providers/auth-provider.tsx`: Lógica de autenticación
+- `amplify/auth/resource.ts`: Configuración de Amplify
